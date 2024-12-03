@@ -5,11 +5,26 @@ from typing import Dict
 
 
 def get_cli_argument(config_path: str) -> Dict:
-    """
-    # 示例TOML配置文件内容
-    description = "Python Script Template Command Line Tool"
+    """从TOML配置文件读取并解析命令行参数
+
+    Args:
+        config_path (str): TOML配置文件路径
+
+    Returns:
+        Dict: 解析后的参数字典
+
+    配置文件格式示例:
+    ```toml
+    description = "工具描述"
     [arguments]
-    参数名称 = {required = true, help="我是该参数的帮助信息", choices = [我是固定的可选内容],type = "float",deault = 0.01}
+    参数名称 = {
+        required = true,      # 是否必需
+        help = "参数说明",    # 帮助信息
+        choices = [],        # 可选值列表
+        type = "float",     # 参数类型
+        default = 0.01      # 默认值
+    }
+    ```
     """
 
     # 读取TOML配置文件
