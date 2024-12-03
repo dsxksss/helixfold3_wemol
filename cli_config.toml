@@ -6,6 +6,5 @@ protein = { required = false, help = "protein sequences in FASTA format" }
 dna = { required = false, help = "DNA sequences in FASTA format" }
 rna = { required = false, help = "RNA sequences in FASTA format" }
 ligand = { required = false, help = "ligand and ion entries, one per line" }
-topN = { type = "int", default = 5, help = "topN structure for ranked output" }
 recycle = { type = "int", default = 10, choices = [10, 20, 50, 100], help = "recycle parameter for model inference (10/20/50/100)" }
 ensemble = { type = "int", default = 1, choices = [1, 5, 10, 100], help = "ensemble parameter for model inference (1/5/10/100)" }

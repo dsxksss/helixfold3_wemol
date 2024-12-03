@@ -4,10 +4,8 @@ import os
 import json
 from Bio.PDB.MMCIFParser import MMCIFParser
 from Bio.PDB.PDBIO import PDBIO
-from subprocess import Popen
-from typing import Optional
-import shutil
 import zipfile
+import time
 
 from dotenv import load_dotenv
 
@@ -16,27 +14,6 @@ from .utils import (
     set_logging_default_config,
     set_progress_value,
 )
-
-
-def run_ext_cmder(cmds: list, query: Optional[str] = None) -> None:
-    """执行外部命令行工具
-
-    Args:
-        cmds (list): 要执行的命令行参数列表
-        query (Optional[str]): 可选的查询字符串
-
-    Raises:
-        RuntimeError: 当外部命令执行失败时抛出
-    """
-    try:
-        with open("out.log", "w") as fout, open("err.log", "w") as ferr:
-            process = Popen(cmds, stdout=fout, stderr=ferr)
-            retcode = process.wait()
-            if retcode:
-                raise RuntimeError("Run Ext Cmd Failed")
-    except Exception as e:
-        logging.error(f"Error running command: {e}")
-        raise
 
 
 def cif_to_pdb(cif, pdb):
@@ -142,7 +119,7 @@ def data_to_json(
     return [json_data]  # 返回列表以符合多任务格式
 
 
-def run_hf3(json_data):
+def run_hf3(json_data) -> bool:
     """运行HelixFold3预测
     Args:
         json_data: 输入的JSON数据列表或单个任务数据
@@ -164,86 +141,81 @@ def run_hf3(json_data):
         return False
 
 
-def get_results_single_run(topN: int):
-    """获取并保存预测结果中置信度最高的前N个结构
-
-    Args:
-        topN (int): 需要保存的最佳结构数量
-    """
+def get_results_single_run():
     try:
-        results_dir = "./"
         all_ensemble_results = []
 
-        # 从input.json读取ensemble值和job_name
+        # 从input.json读取job_name
         with open("input.json") as f:
             input_data = json.load(f)
             job_name = input_data[0].get("job_name", "complex")
-            ensemble = input_data[0].get("ensemble", 1)
 
-        # 检查结果目录
-        result_base_dir = f"{results_dir}/helixfold3_result_to_download_{job_name}"
-        if not os.path.exists(result_base_dir):
-            logging.error(f"Result directory does not exist: {result_base_dir}")
-            raise RuntimeError(f"预测结果目录不存在: {result_base_dir}")
-
-        # 查找所有ensemble结果目录
-        ensemble_dirs = glob.glob(os.path.join(result_base_dir, f"*-*-rank1"))
+        # 查找所有ensemble结果文件夹
+        ensemble_dirs = glob.glob(f"{job_name}-*-rank1")
         if not ensemble_dirs:
-            logging.error(f"No ensemble result directories found in: {result_base_dir}")
-            return
+            raise RuntimeError("未找到预测结果文件夹")
 
-        # 收集所有ensemble结果
-        for ensemble_dir in ensemble_dirs:
-            all_results_file = os.path.join(ensemble_dir, "all_results.json")
-            if not os.path.exists(all_results_file):
-                logging.error(f"Results file does not exist: {all_results_file}")
-                continue
+        output_zip = f"helixfold3_result_to_download_{job_name}_{int(time.time())}.zip"
 
-            with open(all_results_file) as f:
-                result = json.load(f)
-                result["source_dir"] = ensemble_dir
-                all_ensemble_results.append(result)
+        with zipfile.ZipFile(output_zip, "w") as zf:
+            # 这两个文件的处理可以合并到一个循环中
+            for input_file in ["input.json", "terms_of_use.md"]:
+                if os.path.exists(input_file):
+                    dest_name = (
+                        "user_input.json" if input_file == "input.json" else input_file
+                    )
+                    zf.write(input_file, dest_name)
 
-        # 根据ranking_confidence排序并获取topN结果
-        sorted_results = sorted(
-            all_ensemble_results, key=lambda x: x["ranking_confidence"], reverse=True
-        )[:topN]
+            required_files = [
+                "all_results.json",
+                "chain_id_to_input_mapping.json",
+                "predicted_structure.cif",
+            ]
 
-        # 保存topN结果
-        for i, result in enumerate(sorted_results):
-            output_dir = f"./result_rank{i+1}"
-            os.makedirs(output_dir, exist_ok=True)
+            # 处理每个ensemble结果文件夹
+            for ensemble_dir in ensemble_dirs:
+                # 检查必需文件并添加到zip
+                for file in required_files:
+                    file_path = os.path.join(ensemble_dir, file)
+                    if not os.path.exists(file_path):
+                        raise RuntimeError(f"在{ensemble_dir}中未找到必需文件: {file}")
+                    zf.write(file_path, os.path.join(ensemble_dir, file))
 
-            source_dir = result["source_dir"]
+                # 读取评分信息
+                with open(os.path.join(ensemble_dir, "all_results.json")) as f:
+                    results = json.load(f)
+                    all_ensemble_results.append(
+                        {
+                            "ensemble_dir": ensemble_dir,
+                            "ptm": results.get("ptm", 0),
+                            "iptm": results.get("iptm", 0),
+                            "mean_plddt": results.get("mean_plddt", 0),
+                            "ranking_confidence": results.get("ranking_confidence", 0),
+                        }
+                    )
 
-            # 复制结构文件
-            shutil.copy2(
-                os.path.join(source_dir, "predicted_structure.cif"),
-                os.path.join(output_dir, f"{job_name}.cif"),
-            )
+        # 找出最佳结果并输出信息
+        best_result = max(all_ensemble_results, key=lambda x: x["ranking_confidence"])
 
-            # 复制all_results.json
-            shutil.copy2(
-                os.path.join(source_dir, "all_results.json"),
-                os.path.join(output_dir, "all_results.json"),
-            )
+        # 使用f-string合并多行日志输出
+        logging.info(
+            f"最佳预测结果在 {best_result['ensemble_dir']}\n"
+            f"PTM: {best_result['ptm']:.3f}\n"
+            f"iPTM: {best_result['iptm']:.3f}\n"
+            f"Mean pLDDT: {best_result['mean_plddt']:.3f}\n"
+            f"Ranking confidence: {best_result['ranking_confidence']:.3f}"
+        )
 
-            # 复制chain_id_to_input_mapping.json
-            mapping_file = os.path.join(source_dir, "chain_id_to_input_mapping.json")
-            if os.path.exists(mapping_file):
-                shutil.copy2(
-                    mapping_file,
-                    os.path.join(output_dir, "chain_id_to_input_mapping.json"),
-                )
+        # 转换最佳结构格式
+        best_cif = os.path.join(best_result["ensemble_dir"], "predicted_structure.cif")
+        best_pdb = os.path.join(best_result["ensemble_dir"], "predicted_structure.pdb")
+        cif_to_pdb(best_cif, best_pdb)
 
-        # 复制user_input.json到结果目录
-        if os.path.exists("input.json"):
-            shutil.copy2("input.json", os.path.join("./", "user_input.json"))
-
-        logging.info(f"Successfully saved top {topN} results")
+        logging.info(f"结果已保存到: {output_zip}")
+        return True
 
     except Exception as e:
-        logging.error(f"Failed to process results: {str(e)}")
+        logging.error(f"处理结果时发生错误: {str(e)}")
         raise
 
 
@@ -323,7 +295,7 @@ def main() -> int:
 
         # 处理结果
         try:
-            get_results_single_run(arguments.get("topN", 5))
+            get_results_single_run()
             set_progress_value(89)
         except RuntimeError as e:
             logging.error(f"Failed to process results: {e}")
