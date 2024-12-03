@@ -1,0 +1,10 @@
+# 使用例子，请根据实际情况修改
+
+description = "Target Prioritization Command Line Tool"
+[arguments]
+diseases = { required = true, help = "要查找的疾病/症状名称" }
+db_type = { choices = ["direct", "all"], help = "数据库类型(direct/all)" }
+cutoff = { default = 0.5, help = "截断值(0.0~1.0), 只保留截断值以上的数据, 默认0.5", type = "float" }
+target_class = { default = "all", help = "过滤靶点类型, 默认all" }
+db_dir = { help = "指定数据库目录" }
+save_dir = { default = "./", help = "指定导出的数据目录路径, 默认./" }
