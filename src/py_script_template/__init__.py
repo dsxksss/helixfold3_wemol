@@ -6,6 +6,7 @@ from Bio.PDB.MMCIFParser import MMCIFParser
 from Bio.PDB.PDBIO import PDBIO
 import zipfile
 import time
+import shutil
 
 from dotenv import load_dotenv
 
@@ -17,8 +18,17 @@ from .utils import (
 
 
 def cif_to_pdb(cif, pdb):
-    # clean LIG_* in cif file genarated by AF3 on SMILES
-    os.system(f"sed -i 's/LIG_[A-Z]/LIG  /g' {cif}")
+    # 使用Python读取和处理文件，替代sed命令
+    with open(cif, "r") as f:
+        content = f.read()
+
+    # 替换LIG_[A-Z]为LIG
+    import re
+
+    content = re.sub(r"LIG_[A-Z]", "LIG  ", content)
+
+    with open(cif, "w") as f:
+        f.write(content)
 
     parser = MMCIFParser()
     structure = parser.get_structure("tmp", cif)
@@ -150,49 +160,66 @@ def get_results_single_run():
             input_data = json.load(f)
             job_name = input_data[0].get("job_name", "complex")
 
-        # 查找所有ensemble结果文件夹
-        ensemble_dirs = glob.glob(f"{job_name}-*-rank1")
+        # 修改：检查data目录下的结果
+        data_dir = os.path.join("data", f"{job_name}_0")
+        if not os.path.exists(data_dir):
+            raise RuntimeError(f"未找到预测结果文件夹: {data_dir}")
+
+        # 查找结果文件
+        result_zip = None
+        for file in os.listdir(data_dir):
+            if file.startswith("helixfold3_result_to_download_") and file.endswith(
+                ".zip"
+            ):
+                result_zip = os.path.join(data_dir, file)
+                break
+
+        if not result_zip:
+            raise RuntimeError("未找到结果zip文件")
+
+        # 解压结果文件
+        output_dir = os.path.join(data_dir, "extracted_results")
+        os.makedirs(output_dir, exist_ok=True)
+
+        with zipfile.ZipFile(result_zip, "r") as zf:
+            zf.extractall(output_dir)
+
+        # 查找ensemble结果文件夹
+        ensemble_dirs = []
+        for root, dirs, files in os.walk(output_dir):
+            for dir_name in dirs:
+                if dir_name.endswith("-rank1"):
+                    ensemble_dirs.append(os.path.join(root, dir_name))
+
         if not ensemble_dirs:
-            raise RuntimeError("未找到预测结果文件夹")
+            raise RuntimeError(f"在解压后的目录中未找到预测结果文件夹: {output_dir}")
 
-        output_zip = f"helixfold3_result_to_download_{job_name}_{int(time.time())}.zip"
+        required_files = [
+            "all_results.json",
+            "chain_id_to_input_mapping.json",
+            "predicted_structure.cif",
+        ]
 
-        with zipfile.ZipFile(output_zip, "w") as zf:
-            # 这两个文件的处理可以合并到一个循环中
-            for input_file in ["input.json", "terms_of_use.md"]:
-                if os.path.exists(input_file):
-                    dest_name = (
-                        "user_input.json" if input_file == "input.json" else input_file
-                    )
-                    zf.write(input_file, dest_name)
+        # 处理每个ensemble结果文件夹
+        for ensemble_dir in ensemble_dirs:
+            # 检查必需文件是否存在
+            for file in required_files:
+                file_path = os.path.join(ensemble_dir, file)
+                if not os.path.exists(file_path):
+                    raise RuntimeError(f"在{ensemble_dir}中未找到必需文件: {file}")
 
-            required_files = [
-                "all_results.json",
-                "chain_id_to_input_mapping.json",
-                "predicted_structure.cif",
-            ]
-
-            # 处理每个ensemble结果文件夹
-            for ensemble_dir in ensemble_dirs:
-                # 检查必需文件并添加到zip
-                for file in required_files:
-                    file_path = os.path.join(ensemble_dir, file)
-                    if not os.path.exists(file_path):
-                        raise RuntimeError(f"在{ensemble_dir}中未找到必需文件: {file}")
-                    zf.write(file_path, os.path.join(ensemble_dir, file))
-
-                # 读取评分信息
-                with open(os.path.join(ensemble_dir, "all_results.json")) as f:
-                    results = json.load(f)
-                    all_ensemble_results.append(
-                        {
-                            "ensemble_dir": ensemble_dir,
-                            "ptm": results.get("ptm", 0),
-                            "iptm": results.get("iptm", 0),
-                            "mean_plddt": results.get("mean_plddt", 0),
-                            "ranking_confidence": results.get("ranking_confidence", 0),
-                        }
-                    )
+            # 读取评分信息
+            with open(os.path.join(ensemble_dir, "all_results.json")) as f:
+                results = json.load(f)
+                all_ensemble_results.append(
+                    {
+                        "ensemble_dir": ensemble_dir,
+                        "ptm": results.get("ptm", 0),
+                        "iptm": results.get("iptm", 0),
+                        "mean_plddt": results.get("mean_plddt", 0),
+                        "ranking_confidence": results.get("ranking_confidence", 0),
+                    }
+                )
 
         # 找出最佳结果并输出信息
         best_result = max(all_ensemble_results, key=lambda x: x["ranking_confidence"])
@@ -211,7 +238,25 @@ def get_results_single_run():
         best_pdb = os.path.join(best_result["ensemble_dir"], "predicted_structure.pdb")
         cif_to_pdb(best_cif, best_pdb)
 
-        logging.info(f"结果已保存到: {output_zip}")
+        # 复制关键文件到当前目录
+        # 复制结构文件
+        shutil.copy2(best_cif, "./predicted_structure.cif")
+        shutil.copy2(best_pdb, "./predicted_structure.pdb")
+
+        # 复制user_input.json
+        extracted_dir = os.path.dirname(best_result["ensemble_dir"])
+        user_input_path = os.path.join(extracted_dir, "user_input.json")
+        if os.path.exists(user_input_path):
+            shutil.copy2(user_input_path, "./user_input.json")
+
+        logging.info(
+            f"结果文件已复制到当前目录：\n"
+            f"- predicted_structure.cif\n"
+            f"- predicted_structure.pdb\n"
+            f"- all_results.json"
+        )
+
+        logging.info(f"原始结果文件位于: {result_zip}")
         return True
 
     except Exception as e:
