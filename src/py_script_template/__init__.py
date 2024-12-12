@@ -1,12 +1,11 @@
-import glob
 import logging
 import os
 import json
 from Bio.PDB.MMCIFParser import MMCIFParser
 from Bio.PDB.PDBIO import PDBIO
 import zipfile
-import time
 import shutil
+import csv
 
 from dotenv import load_dotenv
 
@@ -45,22 +44,24 @@ def data_to_json(
     ligand_str,
     recycle,
     ensemble,
+    job_name="complex",
 ):
-    """将输入数据转换为JSON格式列表
+    """Convert input data to JSON format list
 
     Args:
-        protein_str: 蛋白质序列FASTA字符串
-        dna_str: DNA序列FASTA字符串
-        rna_str: RNA序列FASTA字符串
-        ligand_str: 配体信息字符串
-        recycle (int): 循环次数，默认10
-        ensemble (int): 集成预测次数，默认1
+        protein_str: Protein sequence FASTA string
+        dna_str: DNA sequence FASTA string
+        rna_str: RNA sequence FASTA string
+        ligand_str: Ligand information string
+        recycle (int): Number of recycles, default 10
+        ensemble (int): Number of ensemble predictions, default 1
+        job_name (str): Name of the job, default "complex"
 
     Returns:
-        list: 包含任务数据的JSON格式列表
+        list: List of task data in JSON format
     """
     json_data = {}
-    json_data["job_name"] = "complex"
+    json_data["job_name"] = job_name
     json_data["recycle"] = recycle
     json_data["ensemble"] = ensemble
     entities = []
@@ -126,25 +127,26 @@ def data_to_json(
                 entities.append(entity)
 
     json_data["entities"] = entities
-    return [json_data]  # 返回列表以符合多任务格式
+    return [json_data]  # 始终返回列表格式
 
 
 def run_hf3(json_data) -> bool:
-    """运行HelixFold3预测
+    """Run HelixFold3 prediction
     Args:
-        json_data: 输入的JSON数据列表或单个任务数据
+        json_data: Input JSON data list or single task data
+        mode: TODO Execution mode, "single" or "batch"
     Returns:
-        bool: 是否运行成功
+        bool: Whether the run was successful
     """
     try:
         from paddlehelix.task import helixfold3
 
-        # 确保json_data是列表格式
+        # Ensure json_data is in list format
         if not isinstance(json_data, list):
             json_data = [json_data]
 
-        for task in json_data:
-            helixfold3.execute(data=task, output_dir="./")
+        # In single mode, only process the first task
+        helixfold3.execute(data=json_data[0], output_dir="./", overwrite=True)
         return True
     except Exception as e:
         logging.error(f"Failed to run HelixFold3: {str(e)}")
@@ -153,19 +155,18 @@ def run_hf3(json_data) -> bool:
 
 def get_results_single_run():
     try:
-        all_ensemble_results = []
-
-        # 从input.json读取job_name
+        # 从input.json读取job_name和ensemble数量
         with open("input.json") as f:
             input_data = json.load(f)
             job_name = input_data[0].get("job_name", "complex")
+            ensemble_size = input_data[0].get("ensemble", 1)
 
-        # 修改：检查data目录下的结果
+        # 检查数据目录下的结果
         data_dir = os.path.join("data", f"{job_name}_0")
         if not os.path.exists(data_dir):
             raise RuntimeError(f"未找到预测结果文件夹: {data_dir}")
 
-        # 查找结果文件
+        # 处理和解压结果文件
         result_zip = None
         for file in os.listdir(data_dir):
             if file.startswith("helixfold3_result_to_download_") and file.endswith(
@@ -177,14 +178,13 @@ def get_results_single_run():
         if not result_zip:
             raise RuntimeError("未找到结果zip文件")
 
-        # 解压结果文件
         output_dir = os.path.join(data_dir, "extracted_results")
         os.makedirs(output_dir, exist_ok=True)
 
         with zipfile.ZipFile(result_zip, "r") as zf:
             zf.extractall(output_dir)
 
-        # 查找ensemble结果文件夹
+        # 查找所有ensemble结果文件夹
         ensemble_dirs = []
         for root, dirs, files in os.walk(output_dir):
             for dir_name in dirs:
@@ -194,66 +194,84 @@ def get_results_single_run():
         if not ensemble_dirs:
             raise RuntimeError(f"在解压后的目录中未找到预测结果文件夹: {output_dir}")
 
-        required_files = [
-            "all_results.json",
-            "chain_id_to_input_mapping.json",
-            "predicted_structure.cif",
-        ]
-
-        # 处理每个ensemble结果文件夹
+        # 处理每个ensemble结果
+        all_ensemble_results = []
         for ensemble_dir in ensemble_dirs:
-            # 检查必需文件是否存在
+            # 检查必需文件
+            required_files = ["all_results.json", "predicted_structure.cif"]
             for file in required_files:
                 file_path = os.path.join(ensemble_dir, file)
                 if not os.path.exists(file_path):
                     raise RuntimeError(f"在{ensemble_dir}中未找到必需文件: {file}")
 
-            # 读取评分信息
+            # 获取ensemble编号
+            ensemble_id = os.path.basename(ensemble_dir).split("-")[1]
+
             with open(os.path.join(ensemble_dir, "all_results.json")) as f:
                 results = json.load(f)
                 all_ensemble_results.append(
                     {
                         "ensemble_dir": ensemble_dir,
+                        "ensemble_id": ensemble_id,
+                        "ranking_confidence": results.get("ranking_confidence", 0),
                         "ptm": results.get("ptm", 0),
                         "iptm": results.get("iptm", 0),
                         "mean_plddt": results.get("mean_plddt", 0),
-                        "ranking_confidence": results.get("ranking_confidence", 0),
                     }
                 )
 
-        # 找出最佳结果并输出信息
-        best_result = max(all_ensemble_results, key=lambda x: x["ranking_confidence"])
+        # 按ranking_confidence排序结果并分配rank
+        all_ensemble_results.sort(key=lambda x: x["ranking_confidence"], reverse=True)
+        for rank, result in enumerate(all_ensemble_results, 1):
+            result["rank"] = rank
 
-        # 使用f-string合并多行日志输出
+        best_result = all_ensemble_results[0]  # 排序后的第一个结果就是最佳结果
+
+        # 生成简化的CSV文件，只包含rank和ranking_score
+        with open("./ranking_scores.csv", "w", newline="") as csvfile:
+            fieldnames = ["Rank", "Ranking_Score"]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+
+            for result in all_ensemble_results:
+                writer.writerow(
+                    {
+                        "Rank": f"rank{result['rank']}",
+                        "Ranking_Score": f"{result['ranking_confidence']:.3f}",
+                    }
+                )
+
+        # 复制并重命名所有结构文件，按rank排序
+        for result in all_ensemble_results:
+            src_cif = os.path.join(result["ensemble_dir"], "predicted_structure.cif")
+            rank_num = result["rank"]
+
+            # 复制并重命名CIF文件
+            dst_cif = f"./rank_{rank_num}.cif"
+            shutil.copy2(src_cif, dst_cif)
+
+        # 输出结果信息
         logging.info(
-            f"最佳预测结果在 {best_result['ensemble_dir']}\n"
+            f"\n最佳结果 (rank{best_result['rank']}):\n"
             f"PTM: {best_result['ptm']:.3f}\n"
             f"iPTM: {best_result['iptm']:.3f}\n"
             f"Mean pLDDT: {best_result['mean_plddt']:.3f}\n"
             f"Ranking confidence: {best_result['ranking_confidence']:.3f}"
         )
 
-        # 转换最佳结构格式
-        best_cif = os.path.join(best_result["ensemble_dir"], "predicted_structure.cif")
-        best_pdb = os.path.join(best_result["ensemble_dir"], "predicted_structure.pdb")
-        cif_to_pdb(best_cif, best_pdb)
+        # 输出所有ensemble结果的简要信息
+        logging.info("\n所有预测结果排名:")
+        for result in all_ensemble_results:
+            logging.info(
+                f"rank{result['rank']}: "
+                f"Ranking confidence = {result['ranking_confidence']:.3f}"
+            )
 
-        # 复制关键文件到当前目录
-        # 复制结构文件
-        shutil.copy2(best_cif, "./predicted_structure.cif")
-        shutil.copy2(best_pdb, "./predicted_structure.pdb")
-
-        # 复制user_input.json
-        extracted_dir = os.path.dirname(best_result["ensemble_dir"])
-        user_input_path = os.path.join(extracted_dir, "user_input.json")
-        if os.path.exists(user_input_path):
-            shutil.copy2(user_input_path, "./user_input.json")
-
+        # 更新输出文件信息
         logging.info(
-            f"结果文件已复制到当前目录：\n"
-            f"- predicted_structure.cif\n"
-            f"- predicted_structure.pdb\n"
-            f"- all_results.json"
+            f"\n结果文件已保存:\n"
+            f"- rank_1.cif 至 rank_{len(all_ensemble_results)}.cif (所有结构预测结果)\n"
+            f"- ranking_scores.csv (排名信息)"
         )
 
         logging.info(f"原始结果文件位于: {result_zip}")
@@ -268,10 +286,9 @@ ERR_CODE = 100
 
 
 def main() -> int:
-    """主函数
-
+    """Main function
     Returns:
-        int: 0表示成功，100表示失败
+        int: 0 for success, 100 for failure
     """
     try:
         load_dotenv()
@@ -305,6 +322,7 @@ def main() -> int:
                 arguments.get("ligand"),
                 arguments.get("recycle", 10),
                 arguments.get("ensemble", 1),
+                arguments.get("job_name", "complex"),
             )
             if not json_data:
                 logging.error("Failed to generate input JSON: empty data")

@@ -19,6 +19,7 @@ state.json
 result/
 data/
 
-predicted_structure.cif
-predicted_structure.pdb
+rank_*.cif
+rank_*.pdb
 user_input.json
+ranking_scores.csv

@@ -2,9 +2,11 @@
 
 description = "HelixFold3 Prediction Pipeline"
 [arguments]
-protein = { required = false, help = "protein sequences in FASTA format" }
-dna = { required = false, help = "DNA sequences in FASTA format" }
-rna = { required = false, help = "RNA sequences in FASTA format" }
+# TODO mode = { required = false, default = "single", choices = ["single", "batch"], help = "execution mode: single task or batch tasks" }
+job_name = { required = false, default = "complex", help = "job name for the prediction task" }
+protein = { required = false, help = "protein sequences in FASTA format string" }
+dna = { required = false, help = "DNA sequences in FASTA format string" }
+rna = { required = false, help = "RNA sequences in FASTA format string" }
 ligand = { required = false, help = "ligand and ion entries, one per line" }
 recycle = { type = "int", default = 10, choices = [10, 20, 50, 100], help = "recycle parameter for model inference (10/20/50/100)" }
-ensemble = { type = "int", default = 1, choices = [1, 5, 10, 100], help = "ensemble parameter for model inference (1/5/10/100)" }
+ensemble = { type = "int", default = 5, choices = [1, 5, 10, 100], help = "ensemble parameter for model inference (1/5/10/100)" }

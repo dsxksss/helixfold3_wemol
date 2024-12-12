@@ -1,6 +1,6 @@
 # HelixFold3-WeMol
 
-这是一个用于HelixFold3预测的WeMol端模块。用于处理蛋白质、DNA、RNA和配体数据，并通过HelixFold3进行预测。
+百度螺旋桨 PaddleHelix 团队研发的 HelixFold3，在常规的小分子配体、核酸分子（包括 DNA 和 RNA）以及蛋白质的结构预测精度上已与 AlphaFold3 相媲美
 
 ## 使用
 
@@ -8,13 +8,13 @@
 
 您可以通过命令行运行此脚本，并传递以下参数：
 
-- `--protein`: 蛋白质序列，FASTA格式
-- `--dna`: DNA序列，FASTA格式
-- `--rna`: RNA序列，FASTA格式
+- `--job_name`: 任务名称，默认值为complex
+- `--protein`: 蛋白质序列，FASTA格式字符串
+- `--dna`: DNA序列，FASTA格式字符串
+- `--rna`: RNA序列，FASTA格式字符串
 - `--ligand`: 配体和离子信息，每行一个
-- `--topN`: 输出排名前N的结构，默认值为5
 - `--recycle`: 模型推理的循环参数，默认值为10
-- `--ensemble`: 模型推理的集成参数，默认值为1
+- `--ensemble`: 设定结构预测数量，默认值为5
 
 ### 示例
 
