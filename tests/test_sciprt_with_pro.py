@@ -16,7 +16,7 @@ KGRFTSSRDNAKNILYLQMSSLKSEDTAMYYCAREALLRPPYYALDYWGQGTSVTVS
 >pro_300AA.C
 LDIQMTQSPASLSASVGETVTITCGASENIYGALTWYQRKQGKSPQLLIYGAINLADDKSSRFSGSGSGRQYSLKISSLHPDDVATYYCQNVLSTPFTFGSGTKLEIK""",
     ]
-    assert run(protein_small_run_cmd, shell=True).returncode == 0
+    assert run(protein_small_run_cmd).returncode == 0
 
 
 def test_protein_medium():
@@ -32,7 +32,7 @@ CKKKYGS
 >pro_600AA.B
 QVQLVESGGGVVQAGGSLRLSCAASGRTFSSRAMGWFRQAPGEGREFVATISWSGSYTEYADSVKGRVTISRDNAKNTVYLQMNSLKPGDTAVYHCAAKNGGAASNYPNDYVYWGQGTQVTVSSHHHHHHE""",
     ]
-    assert run(protein_medium_run_cmd, shell=True).returncode == 0
+    assert run(protein_medium_run_cmd).returncode == 0
 
 
 def test_complex_protein_dna():
@@ -48,7 +48,7 @@ gggaatggcagtattcatccacaatg
 >pro_DNA.C
 ccattgtggatgaatactgccattcc""",
     ]
-    assert run(complex_protein_dna_run_cmd, shell=True).returncode == 0
+    assert run(complex_protein_dna_run_cmd).returncode == 0
 
 
 def test_complex_protein_ligand():
@@ -62,4 +62,4 @@ ADLKAFSKHIYNAYLKNFNMTKKKARSILTGKASHTAPFVIHDIETLWQAEKGLVWKQLVNGLPPYKEISVHVFYRCQCT
         """CC(=O)OC1C[NH+]2CCC1CC2
 CCD,ATP,HY3""",
     ]
-    assert run(complex_protein_ligand_run_cmd, shell=True).returncode == 0
+    assert run(complex_protein_ligand_run_cmd).returncode == 0
