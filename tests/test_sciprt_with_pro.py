@@ -68,11 +68,6 @@ def test_complex_protein_rna():
 
 
 def test_complex_protein_ligand_ion():
-    # 读取SMILES字符串
-    with open("./test_files/potein-ligand-ion/lig.smi") as f:
-        lines = [line for line in f.read().strip().split('\n') if line and not line.startswith("SMILES")]
-        ligand_str = lines[0]  # 获取第一个非空且非标题的行
-
     complex_protein_ligand_ion_run_cmd = [
         "python",
         "/data/PRG/tools/helixfold3/apps/helixfold3_wemol/src/py_script_template/__main__.py",
@@ -81,7 +76,7 @@ def test_complex_protein_ligand_ion():
         "--protein",
         "./test_files/potein-ligand-ion/pro_lig_ion.fasta",
         "--ligand",
-        ligand_str,
+        "./test_files/potein-ligand-ion/ligand.txt",  # 使用固定文件
         "--ion",
         "ZN",
     ]
@@ -89,11 +84,6 @@ def test_complex_protein_ligand_ion():
 
 
 def test_complex_protein_rna_ligand():
-    # 读取SMILES字符串
-    with open("./test_files/protein-RNA-ligand/lig.smi") as f:
-        lines = [line for line in f.read().strip().split('\n') if line and not line.startswith("SMILES")]
-        ligand_str = lines[0]  # 获取第一个非空且非标题的行
-
     complex_protein_rna_ligand_run_cmd = [
         "python",
         "/data/PRG/tools/helixfold3/apps/helixfold3_wemol/src/py_script_template/__main__.py",
@@ -104,6 +94,6 @@ def test_complex_protein_rna_ligand():
         "--rna",
         "./test_files/protein-RNA-ligand/pro_RNA_lig.fasta",
         "--ligand",
-        ligand_str,
+        "./test_files/protein-RNA-ligand/ligand.txt",  # 使用固定文件
     ]
     assert run(complex_protein_rna_ligand_run_cmd).returncode == 0
