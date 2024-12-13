@@ -13,6 +13,8 @@ from py_script_template.cli import get_cli_argument
 from .utils import (
     set_logging_default_config,
     set_progress_value,
+    load_fasta,
+    load_ligands,
 )
 
 
@@ -38,10 +40,11 @@ def cif_to_pdb(cif, pdb):
 
 
 def data_to_json(
-    protein_str,
-    dna_str,
-    rna_str,
-    ligand_str,
+    protein_file,
+    dna_file,
+    rna_file,
+    ligand_file,
+    ion,
     recycle,
     ensemble,
     job_name="complex",
@@ -49,10 +52,11 @@ def data_to_json(
     """Convert input data to JSON format list
 
     Args:
-        protein_str: Protein sequence FASTA string
-        dna_str: DNA sequence FASTA string
-        rna_str: RNA sequence FASTA string
-        ligand_str: Ligand information string
+        protein_file: Path to protein sequence FASTA file
+        dna_file: Path to DNA sequence FASTA file
+        rna_file: Path to RNA sequence FASTA file
+        ligand_file: Path to ligand entries file
+        ion: Ion CCD code string
         recycle (int): Number of recycles, default 10
         ensemble (int): Number of ensemble predictions, default 1
         job_name (str): Name of the job, default "complex"
@@ -60,73 +64,158 @@ def data_to_json(
     Returns:
         list: List of task data in JSON format
     """
-    json_data = {}
-    json_data["job_name"] = job_name
-    json_data["recycle"] = recycle
-    json_data["ensemble"] = ensemble
-    entities = []
+    # 验证基本参数
+    valid_recycle_values = {10, 20, 50, 100}
+    if recycle not in valid_recycle_values:
+        raise ValueError(
+            f"recycle must be one of {valid_recycle_values}, got {recycle}"
+        )
 
-    def parse_fasta_str(fasta_str):
-        if not fasta_str:
-            return []
-        seqs = []
-        sid, seq = None, ""
-        for line in fasta_str.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            if line.startswith(">"):
-                if len(seq) > 0:
-                    seqs.append((sid, seq))
-                    seq = ""
-                sid = line[1:]
-            else:
-                seq += line.upper()
-        if len(seq) > 0:
-            seqs.append((sid, seq))
-        return seqs
+    valid_ensemble_values = {1, 5, 10, 100}
+    if ensemble not in valid_ensemble_values:
+        raise ValueError(
+            f"ensemble must be one of {valid_ensemble_values}, got {ensemble}"
+        )
+
+    if not isinstance(job_name, str) or not job_name:
+        raise ValueError("job_name must be a non-empty string")
+
+    json_data = {
+        "job_name": job_name,
+        "recycle": recycle,
+        "ensemble": ensemble,
+        "entities": [],
+    }
 
     # 处理蛋白质序列
-    if protein_str:
-        pro_seqs_batch = parse_fasta_str(protein_str)
-        for i, pro_seq in enumerate(pro_seqs_batch):
-            entity = {"type": "protein", "sequence": pro_seq[1], "count": 1}
-            entities.append(entity)
+    if protein_file:
+        seqs = load_fasta(protein_file)
+        for sid, sequence in seqs:
+            if sid.endswith(".A"):  # 只处理蛋白质序列
+                if len(sequence) > 2000:
+                    raise ValueError(f"Protein sequence length exceeds 2000: {sid}")
+
+                # 检查是否只包含20种标准氨基酸
+                valid_aa = set("ACDEFGHIKLMNPQRSTVWY")
+                invalid_aa = set(sequence) - valid_aa
+                if invalid_aa:
+                    raise ValueError(
+                        f"Invalid amino acids found in protein sequence {sid}: {invalid_aa}"
+                    )
+
+                entity = {"type": "protein", "sequence": sequence, "count": 1}
+                json_data["entities"].append(entity)
 
     # 处理DNA序列
-    if dna_str:
-        dna_seqs_batch = parse_fasta_str(dna_str)
-        for i, dna_seq in enumerate(dna_seqs_batch):
-            entity = {"type": "dna", "sequence": dna_seq[1], "count": 1}
-            entities.append(entity)
+    if dna_file:
+        seqs = load_fasta(dna_file)
+        for sid, sequence in seqs:
+            if sid.endswith((".B", ".C")):  # 只处理DNA序列
+                if len(sequence) > 2000:
+                    raise ValueError(f"DNA sequence length exceeds 2000: {sid}")
+
+                # 将序列转换为大写进行检查
+                sequence = sequence.upper()
+                # 检查是否只包含ATCG
+                valid_bases = set("ATCG")
+                invalid_bases = set(sequence) - valid_bases
+                if invalid_bases:
+                    raise ValueError(
+                        f"Invalid bases found in DNA sequence {sid}: {invalid_bases}"
+                    )
+
+                entity = {
+                    "type": "dna",
+                    "sequence": sequence.upper(),  # DNA序列使用小写
+                    "count": 1,
+                }
+                json_data["entities"].append(entity)
 
     # 处理RNA序列
-    if rna_str:
-        rna_seqs_batch = parse_fasta_str(rna_str)
-        for i, rna_seq in enumerate(rna_seqs_batch):
-            entity = {"type": "rna", "sequence": rna_seq[1], "count": 1}
-            entities.append(entity)
+    if rna_file:
+        seqs = load_fasta(rna_file)
+        for sid, sequence in seqs:
+            if sid.endswith(".R"):  # 只处理RNA序列
+                if len(sequence) > 2000:
+                    raise ValueError(f"RNA sequence length exceeds 2000: {sid}")
 
-    # 处理配体和离子
-    if ligand_str:
-        for line in ligand_str.strip().split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            if line.startswith("CCD,") or line.startswith("ccd,"):  # CCD codes
-                parts = line.split(",")
-                for part in parts[1:]:
-                    part = part.strip()
-                    if len(part) == 2:  # 离子通常是2字符代码
-                        entity = {"type": "ion", "ccd": part, "count": 1}
-                    else:
-                        entity = {"type": "ligand", "ccd": part, "count": 1}
-                    entities.append(entity)
+                # 将序列转换为大写并替换T为U
+                sequence = sequence.upper().replace("T", "U")
+
+                # 检查是否只包含AUCG
+                valid_bases = set("AUCG")
+                invalid_bases = set(sequence) - valid_bases
+                if invalid_bases:
+                    raise ValueError(
+                        f"Invalid bases found in RNA sequence {sid}: {invalid_bases}"
+                    )
+
+                entity = {
+                    "type": "rna",
+                    "sequence": sequence.upper(),  # RNA序列使用大写
+                    "count": 1,
+                }
+                json_data["entities"].append(entity)
+
+    # 处理配体
+    if ligand_file:
+        ligands = load_ligands(ligand_file)
+        for ligand in ligands:
+            if isinstance(ligand, list):  # CCD codes
+                for part in ligand[1:]:  # 跳过 "CCD," 前缀
+                    entity = {"type": "ligand", "ccd": part, "count": 1}
+                    json_data["entities"].append(entity)
             else:  # SMILES
-                entity = {"type": "ligand", "smiles": line, "count": 1}
-                entities.append(entity)
+                entity = {"type": "ligand", "smiles": ligand, "count": 1}
+                json_data["entities"].append(entity)
 
-    json_data["entities"] = entities
+    # 处理离子
+    VALID_IONS = {
+        "MG",  # MG2+
+        "ZN",  # ZN2+
+        "CL",  # CL-
+        "CA",  # CA2+
+        "NA",  # NA+
+        "MN",  # MN2+
+        "MN3",  # MN3+
+        "K",  # K+
+        "FE",  # FE3+
+        "FE2",  # FE2+
+        "CU",  # CU2+
+        "CU1",  # CU1+
+        "CU3",  # CU3+
+        "CO",  # CO2+
+    }
+
+    if ion:  # 如果提供了ion参数
+        if ion in VALID_IONS:
+            entity = {"type": "ion", "ccd": ion, "count": 1}
+            json_data["entities"].append(entity)
+        else:
+            raise ValueError(
+                f"Invalid ion CCD code: {ion}. Must be one of: {', '.join(sorted(VALID_IONS))}"
+            )
+
+    # 验证实体数量和总长度
+    if not json_data["entities"]:
+        raise ValueError("No valid entities found in input files")
+
+    # 计算总token数量
+    total_tokens = 0
+    for entity in json_data["entities"]:
+        if entity["type"] in ["protein", "dna", "rna"]:
+            total_tokens += len(entity["sequence"])
+        elif entity["type"] == "ligand" and "smiles" in entity:
+            # 配体中的一个原子算做一个token
+            # TODO: 实现更准确的SMILES token计算
+            total_tokens += len(entity["smiles"])  # 这是一个简化的计算方式
+
+    if total_tokens > 2000:
+        raise ValueError(f"Total sequence length exceeds 2000: {total_tokens}")
+
+    # 在返回之前打印生成的JSON，方便调试
+    logging.debug(f"Generated JSON data: {json.dumps(json_data, indent=2)}")
+
     return [json_data]  # 始终返回列表格式
 
 
@@ -250,7 +339,7 @@ def get_results_single_run():
             dst_cif = f"./rank_{rank_num}.cif"
             shutil.copy2(src_cif, dst_cif)
 
-        # 输出结果信息
+        # 出结果信息
         logging.info(
             f"\n最佳结果 (rank{best_result['rank']}):\n"
             f"PTM: {best_result['ptm']:.3f}\n"
@@ -259,7 +348,7 @@ def get_results_single_run():
             f"Ranking confidence: {best_result['ranking_confidence']:.3f}"
         )
 
-        # 输出所有ensemble结果的简要信息
+        # 输出所有ensemble结果的要信息
         logging.info("\n所有预测结果排名:")
         for result in all_ensemble_results:
             logging.info(
@@ -320,6 +409,7 @@ def main() -> int:
                 arguments.get("dna"),
                 arguments.get("rna"),
                 arguments.get("ligand"),
+                arguments.get("ion"),
                 arguments.get("recycle", 10),
                 arguments.get("ensemble", 1),
                 arguments.get("job_name", "complex"),

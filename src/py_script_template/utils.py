@@ -4,7 +4,6 @@ import logging
 import os
 from datetime import datetime
 import sys
-from typing import Dict, List, Tuple, Union
 
 
 def mkdir_if_not_exist(path: str) -> None:
@@ -121,32 +120,25 @@ def load_ligands(lig_file: str, batch: bool = False) -> list | dict:
         list | dict: 非批处理模式返回配体列表，批处理模式返回字典
     """
     if batch:
-        ligands = {}
-        with open(lig_file) as fin:
-            for line in fin.readlines():
-                ligs = []
-                tmp = line.strip().split(":")
-                uid = tmp[0].strip()
-                for lig in tmp[1:]:
-                    lig = lig.strip()
-                    if lig.startswith("CCD,") or lig.startswith("ccd,"):
-                        lig = lig.split(",")
-                        ligs.append([t.strip() for t in lig])
-                    else:
-                        ligs.append(lig)
-                ligands[uid] = ligs
+        # 批处理模式暂不支持
+        raise NotImplementedError("Batch mode not supported yet")
     else:
-        ligands = []
+        smiles_list = []
         with open(lig_file) as fin:
-            for line in fin.readlines():
-                tmp = line.strip()
-                if tmp.startswith("CCD,") or tmp.startswith("ccd,"):
-                    tmp = tmp.split(",")
-                    ligands.append([t.strip() for t in tmp])
+            for line in fin:
+                line = line.strip()
+                # 跳过空行和标题行
+                if not line or line.startswith("SMILES"):
+                    continue
+                # 如果是CCD格式
+                if line.startswith("CCD,"):
+                    smiles_list.append(line.split(","))
+                # 如果是SMILES格式
                 else:
-                    ligands.append(tmp)
-
-    return ligands
+                    # 如果有空格，取第一部分（SMILES字符串）
+                    smiles = line.split()[0]
+                    smiles_list.append(smiles)
+        return smiles_list
 
 
 def load_modification(mdf_file: str, batch: bool = False) -> list | dict:

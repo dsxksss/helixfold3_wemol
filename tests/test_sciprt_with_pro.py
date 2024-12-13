@@ -8,13 +8,7 @@ def test_protein_small():
         "--job_name",
         "pro_300AA",
         "--protein",
-        """>pro_300AA.A
-GPVIRQGPVNQTVAVDGTFVLSCVATGSPVPTILWRKDGVLVSTQDSRIKQLENGVLQIRYAKLGDTGRYTCIASTPSGEATWSAYIEVQ
->pro_300AA.B
-EVQLVESGGGVVQPGGSLKLSCAASGFTFSTYDMSWVRQTPDKRLELVATINSNGGSTYYPDSV
-KGRFTSSRDNAKNILYLQMSSLKSEDTAMYYCAREALLRPPYYALDYWGQGTSVTVS
->pro_300AA.C
-LDIQMTQSPASLSASVGETVTITCGASENIYGALTWYQRKQGKSPQLLIYGAINLADDKSSRFSGSGSGRQYSLKISSLHPDDVATYYCQNVLSTPFTFGSGTKLEIK""",
+        "./test_files/protein/pro_300AA.fasta",
     ]
     assert run(protein_small_run_cmd).returncode == 0
 
@@ -26,11 +20,7 @@ def test_protein_medium():
         "--job_name",
         "pro_600AA",
         "--protein",
-        """>pro_600AA.A
-VSGITALTVVVGTVIGAGIFFKPTAVYGAAGAPGLGLLAWFVAGIITIAGGLTVAEIGTIYPQTGGMMIYLEKVYGRWLGFLVGWAQMVIYYPANIAALAIIFATQFVNLFALSDSTIVPTAILTSIFLMGVNFLGTKYSGWIQTLATILKLIPLVVIIVAGLLYPGGGVIRLVPFSVETHPVLTSFGSALIATLFAYDGWINVGTLAGEMKNPGKMLPKVIIGGLSIVMAVYLLTNIAYLFVLDSSQLAGTDTPAALVASHLFEGIGSKLVTIGILISVFGGINGYIISGLRVPYALATQKMLPFSDWFARINPKTNLPINGGLVMLGIAIVMILTGQFNQLTDLIVFVIWFFITLTFIAVIILRKTQPDIERPYRVPFYPVIPLIAIIGGLYIIFNTLIVQPKNAFIGILLTLIGIPIYFY
-CKKKYGS
->pro_600AA.B
-QVQLVESGGGVVQAGGSLRLSCAASGRTFSSRAMGWFRQAPGEGREFVATISWSGSYTEYADSVKGRVTISRDNAKNTVYLQMNSLKPGDTAVYHCAAKNGGAASNYPNDYVYWGQGTQVTVSSHHHHHHE""",
+        "./test_files/protein/pro_600AA.fasta",
     ]
     assert run(protein_medium_run_cmd).returncode == 0
 
@@ -39,14 +29,12 @@ def test_complex_protein_dna():
     complex_protein_dna_run_cmd = [
         "python",
         "/data/PRG/tools/helixfold3/apps/helixfold3_wemol/src/py_script_template/__main__.py",
+        "--job_name",
+        "pro_DNA",
         "--protein",
-        """>pro_DNA.A
-ASSINPWILTGFADAEGSFGLYIINRNRGRIRYTTRLKFTITLHNKDKSILENIQSTWKVGI""",
+        "./test_files/protein-DNA/pro_DNA.fasta",
         "--dna",
-        """>pro_DNA.B
-gggaatggcagtattcatccacaatg
->pro_DNA.C
-ccattgtggatgaatactgccattcc""",
+        "./test_files/protein-DNA/pro_DNA.fasta",
     ]
     assert run(complex_protein_dna_run_cmd).returncode == 0
 
@@ -55,11 +43,67 @@ def test_complex_protein_ligand():
     complex_protein_ligand_run_cmd = [
         "python",
         "/data/PRG/tools/helixfold3/apps/helixfold3_wemol/src/py_script_template/__main__.py",
+        "--job_name",
+        "pro_lig",
         "--protein",
-        """>pro_lig.A
-ADLKAFSKHIYNAYLKNFNMTKKKARSILTGKASHTAPFVIHDIETLWQAEKGLVWKQLVNGLPPYKEISVHVFYRCQCTTVETVRELTEFAKSIPSFSSLFLNDQVTLLKYGVHEAIFAMLASIVNKDGLLVANGSGFVTREFLRSLRKPFSDIIEPKFEFAVKFNALELDDSDLALFIAAIIILCGDRPGLMNVPRVEAIQDTILRALEFHLQANHPDAQYLFPKLLQKMADLRQLVTEHAQMMQRIKKTETETSLHPLLQEIYKDMY""",
+        "./test_files/protein-ligand/pro_lig.fasta",
         "--ligand",
-        """CC(=O)OC1C[NH+]2CCC1CC2
-CCD,ATP,HY3""",
+        "./test_files/protein-ligand/ligand.txt",  # 使用固定文件
     ]
     assert run(complex_protein_ligand_run_cmd).returncode == 0
+
+
+def test_complex_protein_rna():
+    complex_protein_rna_run_cmd = [
+        "python",
+        "/data/PRG/tools/helixfold3/apps/helixfold3_wemol/src/py_script_template/__main__.py",
+        "--job_name",
+        "pro_RNA",
+        "--protein",
+        "./test_files/protein-RNA/pro_RNA.fasta",
+        "--rna",
+        "./test_files/protein-RNA/pro_RNA.fasta",
+    ]
+    assert run(complex_protein_rna_run_cmd).returncode == 0
+
+
+def test_complex_protein_ligand_ion():
+    # 读取SMILES字符串
+    with open("./test_files/potein-ligand-ion/lig.smi") as f:
+        lines = [line for line in f.read().strip().split('\n') if line and not line.startswith("SMILES")]
+        ligand_str = lines[0]  # 获取第一个非空且非标题的行
+
+    complex_protein_ligand_ion_run_cmd = [
+        "python",
+        "/data/PRG/tools/helixfold3/apps/helixfold3_wemol/src/py_script_template/__main__.py",
+        "--job_name",
+        "pro_lig_ion",
+        "--protein",
+        "./test_files/potein-ligand-ion/pro_lig_ion.fasta",
+        "--ligand",
+        ligand_str,
+        "--ion",
+        "ZN",
+    ]
+    assert run(complex_protein_ligand_ion_run_cmd).returncode == 0
+
+
+def test_complex_protein_rna_ligand():
+    # 读取SMILES字符串
+    with open("./test_files/protein-RNA-ligand/lig.smi") as f:
+        lines = [line for line in f.read().strip().split('\n') if line and not line.startswith("SMILES")]
+        ligand_str = lines[0]  # 获取第一个非空且非标题的行
+
+    complex_protein_rna_ligand_run_cmd = [
+        "python",
+        "/data/PRG/tools/helixfold3/apps/helixfold3_wemol/src/py_script_template/__main__.py",
+        "--job_name",
+        "pro_RNA_lig",
+        "--protein",
+        "./test_files/protein-RNA-ligand/pro_RNA_lig.fasta",
+        "--rna",
+        "./test_files/protein-RNA-ligand/pro_RNA_lig.fasta",
+        "--ligand",
+        ligand_str,
+    ]
+    assert run(complex_protein_rna_ligand_run_cmd).returncode == 0
