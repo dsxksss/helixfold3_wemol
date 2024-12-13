@@ -3,7 +3,7 @@ from subprocess import run
 
 def test_protein_small():
     protein_small_run_cmd = [
-        "bash",
+        "python",
         "/data/PRG/tools/helixfold3/apps/helixfold3_wemol/src/py_script_template/__main__.py",
         "--job_name",
         "pro_300AA",
@@ -21,7 +21,7 @@ LDIQMTQSPASLSASVGETVTITCGASENIYGALTWYQRKQGKSPQLLIYGAINLADDKSSRFSGSGSGRQYSLKISSLH
 
 def test_protein_medium():
     protein_medium_run_cmd = [
-        "bash",
+        "python",
         "/data/PRG/tools/helixfold3/apps/helixfold3_wemol/src/py_script_template/__main__.py",
         "--job_name",
         "pro_600AA",
@@ -37,7 +37,7 @@ QVQLVESGGGVVQAGGSLRLSCAASGRTFSSRAMGWFRQAPGEGREFVATISWSGSYTEYADSVKGRVTISRDNAKNTVY
 
 def test_complex_protein_dna():
     complex_protein_dna_run_cmd = [
-        "bash",
+        "python",
         "/data/PRG/tools/helixfold3/apps/helixfold3_wemol/src/py_script_template/__main__.py",
         "--protein",
         """>pro_DNA.A
@@ -53,7 +53,7 @@ ccattgtggatgaatactgccattcc""",
 
 def test_complex_protein_ligand():
     complex_protein_ligand_run_cmd = [
-        "bash",
+        "python",
         "/data/PRG/tools/helixfold3/apps/helixfold3_wemol/src/py_script_template/__main__.py",
         "--protein",
         """>pro_lig.A
