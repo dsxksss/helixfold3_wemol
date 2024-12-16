@@ -31,21 +31,15 @@ complex_protein_dna = "rye run main --job_name pro_DNA --protein ./test_files/pr
 
 complex_protein_rna = "rye run main --job_name pro_RNA --protein ./test_files/protein-RNA/pro_RNA.fasta --rna ./test_files/protein-RNA/pro_RNA.fasta"
 
-complex_protein_ligand = """rye run main --job_name pro_lig --protein ./test_files/protein-ligand/pro_lig.fasta --ligand "$(cat ./test_files/protein-ligand/lig.smi)" """
+complex_protein_ligand = """rye run main --job_name pro_lig --protein ./test_files/protein-ligand/pro_lig.fasta --ligand ./test_files/protein-ligand/lig.smi"""
 
-complex_protein_ligand_ion = """
-ligand_content=$(cat ./test_files/potein-ligand-ion/lig.smi)
-rye run main --job_name pro_lig_ion \
+complex_protein_ligand_ion = """rye run main --job_name pro_lig_ion \
     --protein ./test_files/potein-ligand-ion/pro_lig_ion.fasta \
-    --ligand "$ligand_content" \
+    --ligand ./test_files/potein-ligand-ion/lig.smi \
     --ion "ZN"
 """
 
-complex_protein_rna_ligand = """rye run main --job_name pro_RNA_lig --protein ./test_files/protein-RNA-ligand/pro_RNA_lig.fasta --rna ./test_files/protein-RNA-ligand/pro_RNA_lig.fasta --ligand "$(cat ./test_files/protein-RNA-ligand/lig.smi)" """
-
-# 测试命令组
-test_all = """rye run protein_small && rye run protein_medium && rye run complex_protein_dna && rye run complex_protein_rna && rye run complex_protein_ligand && rye run complex_protein_ligand_ion && rye run complex_protein_rna_ligand"""
-
+complex_protein_rna_ligand = """rye run main --job_name pro_RNA_lig --protein ./test_files/protein-RNA-ligand/pro_RNA_lig.fasta --rna ./test_files/protein-RNA-ligand/pro_RNA_lig.fasta --ligand ./test_files/protein-RNA-ligand/lig.smi"""
 # 开发测试用例
 dev = "rye run protein_medium"
 

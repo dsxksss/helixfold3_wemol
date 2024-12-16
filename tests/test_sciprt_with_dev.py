@@ -1,17 +1,4 @@
-from subprocess import run, PIPE
-import os
-
-
-def run_with_check(cmd):
-    """运行命令并返回详细信息"""
-    result = run(cmd, stdout=PIPE, stderr=PIPE, text=True)
-    if result.returncode != 0:
-        print(f"Command failed with return code {result.returncode}")
-        print("STDOUT:")
-        print(result.stdout)
-        print("STDERR:")
-        print(result.stderr)
-    return result
+from subprocess import run
 
 
 def test_protein_small():
@@ -24,7 +11,7 @@ def test_protein_small():
         "--protein",
         "./test_files/protein/pro_300AA.fasta",
     ]
-    assert run_with_check(protein_small_run_cmd).returncode == 0
+    assert run(protein_small_run_cmd).returncode == 0
 
 
 def test_protein_medium():
@@ -37,7 +24,7 @@ def test_protein_medium():
         "--protein",
         "./test_files/protein/pro_600AA.fasta",
     ]
-    assert run_with_check(protein_medium_run_cmd).returncode == 0
+    assert run(protein_medium_run_cmd).returncode == 0
 
 
 def test_complex_protein_dna():
@@ -52,7 +39,7 @@ def test_complex_protein_dna():
         "--dna",
         "./test_files/protein-DNA/pro_DNA.fasta",
     ]
-    assert run_with_check(complex_protein_dna_run_cmd).returncode == 0
+    assert run(complex_protein_dna_run_cmd).returncode == 0
 
 
 def test_complex_protein_rna():
@@ -67,7 +54,7 @@ def test_complex_protein_rna():
         "--rna",
         "./test_files/protein-RNA/pro_RNA.fasta",
     ]
-    assert run_with_check(complex_protein_rna_run_cmd).returncode == 0
+    assert run(complex_protein_rna_run_cmd).returncode == 0
 
 
 def test_complex_protein_ligand():
@@ -80,9 +67,9 @@ def test_complex_protein_ligand():
         "--protein",
         "./test_files/protein-ligand/pro_lig.fasta",
         "--ligand",
-        "./test_files/protein-ligand/ligand.txt",  # 使用固定文件
+        "./test_files/protein-ligand/lig.smi",
     ]
-    assert run_with_check(complex_protein_ligand_run_cmd).returncode == 0
+    assert run(complex_protein_ligand_run_cmd).returncode == 0
 
 
 def test_complex_protein_ligand_ion():
@@ -95,11 +82,11 @@ def test_complex_protein_ligand_ion():
         "--protein",
         "./test_files/potein-ligand-ion/pro_lig_ion.fasta",
         "--ligand",
-        "./test_files/potein-ligand-ion/ligand.txt",  # 使用固定文件
+        "./test_files/potein-ligand-ion/lig.smi",
         "--ion",
         "ZN",
     ]
-    assert run_with_check(complex_protein_ligand_ion_run_cmd).returncode == 0
+    assert run(complex_protein_ligand_ion_run_cmd).returncode == 0
 
 
 def test_complex_protein_rna_ligand():
@@ -114,6 +101,6 @@ def test_complex_protein_rna_ligand():
         "--rna",
         "./test_files/protein-RNA-ligand/pro_RNA_lig.fasta",
         "--ligand",
-        "./test_files/protein-RNA-ligand/ligand.txt",  # 使用固定文件
+        "./test_files/protein-RNA-ligand/lig.smi",
     ]
-    assert run_with_check(complex_protein_rna_ligand_run_cmd).returncode == 0
+    assert run(complex_protein_rna_ligand_run_cmd).returncode == 0

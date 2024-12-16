@@ -87,89 +87,37 @@ def data_to_json(
         "entities": [],
     }
 
-    # 处理蛋白质序列
-    if protein_file:
-        seqs = load_fasta(protein_file)
-        for sid, sequence in seqs:
-            if sid.endswith(".A"):  # 只处理蛋白质序列
-                if len(sequence) > 2000:
-                    raise ValueError(f"Protein sequence length exceeds 2000: {sid}")
+    # 定义支持的氨基酸修饰
+    VALID_MODIFICATIONS = {
+        "R": ["2MR", "AGM", "CIR"],
+        "C": ["MCS", "P1L", "SNC"],
+        "H": ["NEP", "HIP"],
+        "K": ["ALY", "MLY", "M3L", "MLZ", "LYZ", "KCR", "YHA"],
+        "N": ["AHB", "SNN"],
+        "P": ["HYP", "HY3"],
+        "S": ["SEP"],
+        "T": ["TPO"],
+        "W": ["TRF"],
+        "Y": ["PTR"],
+    }
 
-                # 检查是否只包含20种标准氨基酸
-                valid_aa = set("ACDEFGHIKLMNPQRSTVWY")
-                invalid_aa = set(sequence) - valid_aa
-                if invalid_aa:
-                    raise ValueError(
-                        f"Invalid amino acids found in protein sequence {sid}: {invalid_aa}"
-                    )
+    # 添加DNA修饰的定义
+    VALID_DNA_MODIFICATIONS = {
+        "A": ["6MA", "3DR"],
+        "C": ["5CM", "C34", "5HC", "1CC", "5FC", "3DR"],
+        "T": ["3DR"],
+        "G": ["6OG", "8OG", "3DR"],
+    }
 
-                entity = {"type": "protein", "sequence": sequence, "count": 1}
-                json_data["entities"].append(entity)
+    # 添加RNA修饰的定义
+    VALID_RNA_MODIFICATIONS = {
+        "A": ["A2M", "MA6", "6MZ"],
+        "C": ["5MC", "OMC", "4OC", "RSQ"],
+        "U": ["5MU", "OMU", "UR3", "PSU"],
+        "G": ["2MG", "OMG", "7MG"],
+    }
 
-    # 处理DNA序列
-    if dna_file:
-        seqs = load_fasta(dna_file)
-        for sid, sequence in seqs:
-            if sid.endswith((".B", ".C")):  # 只处理DNA序列
-                if len(sequence) > 2000:
-                    raise ValueError(f"DNA sequence length exceeds 2000: {sid}")
-
-                # 将序列转换为大写进行检查
-                sequence = sequence.upper()
-                # 检查是否只包含ATCG
-                valid_bases = set("ATCG")
-                invalid_bases = set(sequence) - valid_bases
-                if invalid_bases:
-                    raise ValueError(
-                        f"Invalid bases found in DNA sequence {sid}: {invalid_bases}"
-                    )
-
-                entity = {
-                    "type": "dna",
-                    "sequence": sequence.upper(),  # DNA序列使用小写
-                    "count": 1,
-                }
-                json_data["entities"].append(entity)
-
-    # 处理RNA序列
-    if rna_file:
-        seqs = load_fasta(rna_file)
-        for sid, sequence in seqs:
-            if sid.endswith(".R"):  # 只处理RNA序列
-                if len(sequence) > 2000:
-                    raise ValueError(f"RNA sequence length exceeds 2000: {sid}")
-
-                # 将序列转换为大写并替换T为U
-                sequence = sequence.upper().replace("T", "U")
-
-                # 检查是否只包含AUCG
-                valid_bases = set("AUCG")
-                invalid_bases = set(sequence) - valid_bases
-                if invalid_bases:
-                    raise ValueError(
-                        f"Invalid bases found in RNA sequence {sid}: {invalid_bases}"
-                    )
-
-                entity = {
-                    "type": "rna",
-                    "sequence": sequence.upper(),  # RNA序列使用大写
-                    "count": 1,
-                }
-                json_data["entities"].append(entity)
-
-    # 处理配体
-    if ligand_file:
-        ligands = load_ligands(ligand_file)
-        for ligand in ligands:
-            if isinstance(ligand, list):  # CCD codes
-                for part in ligand[1:]:  # 跳过 "CCD," 前缀
-                    entity = {"type": "ligand", "ccd": part, "count": 1}
-                    json_data["entities"].append(entity)
-            else:  # SMILES
-                entity = {"type": "ligand", "smiles": ligand, "count": 1}
-                json_data["entities"].append(entity)
-
-    # 处理离子
+    # 添加支持的离子定义
     VALID_IONS = {
         "MG",  # MG2+
         "ZN",  # ZN2+
@@ -187,14 +135,344 @@ def data_to_json(
         "CO",  # CO2+
     }
 
-    if ion:  # 如果提供了ion参数
-        if ion in VALID_IONS:
-            entity = {"type": "ion", "ccd": ion, "count": 1}
-            json_data["entities"].append(entity)
+    def validate_protein_sequence(sequence, sid):
+        """验证蛋白质序列"""
+        if not sequence:
+            raise ValueError(f"Empty sequence for {sid}")
+
+        if len(sequence) > 2000:
+            raise ValueError(f"Protein sequence length exceeds 2000: {sid}")
+
+        valid_aa = set("ACDEFGHIKLMNPQRSTVWY")
+        invalid_aa = set(sequence) - valid_aa
+        if invalid_aa:
+            raise ValueError(
+                f"Invalid amino acids found in protein sequence {sid}: {invalid_aa}"
+            )
+
+        return sequence
+
+    def validate_count(count, entity_type, max_count=50):
+        """验证实体的count值"""
+        if not isinstance(count, int):
+            raise ValueError(
+                f"{entity_type} count must be an integer, got {type(count)}"
+            )
+        if count < 1:
+            raise ValueError(f"{entity_type} count must be at least 1, got {count}")
+        if count > max_count:
+            raise ValueError(
+                f"{entity_type} count cannot exceed {max_count}, got {count}"
+            )
+        return count
+
+    def create_protein_entity(sequence, sid, modifications=None, count=1):
+        """创建蛋白质实体"""
+        sequence = validate_protein_sequence(sequence, sid)
+        count = validate_count(count, "Protein")
+
+        entity = {"type": "protein", "sequence": sequence, "count": count}
+
+        if modifications:
+            try:
+                # 验证修饰信息
+                valid_mod_types = {"residue_replace", "glycos"}
+                for mod in modifications:
+                    if "type" not in mod:
+                        raise ValueError("Missing 'type' field in modification")
+                    if mod["type"] not in valid_mod_types:
+                        raise ValueError(f"Invalid modification type: {mod['type']}")
+                    if "index" not in mod:
+                        raise ValueError("Missing 'index' field in modification")
+
+                    index = mod["index"]
+                    if not isinstance(index, int):
+                        raise ValueError(
+                            f"Modification index must be an integer, got {type(index)}"
+                        )
+                    if index < 1 or index > len(sequence):
+                        raise ValueError(
+                            f"Modification index {index} out of range (1-{len(sequence)})"
+                        )
+
+                    if mod["type"] == "residue_replace":
+                        if "ccd" not in mod:
+                            raise ValueError(
+                                "Missing 'ccd' field in residue_replace modification"
+                            )
+
+                        aa = sequence[index - 1]
+                        if aa not in VALID_MODIFICATIONS:
+                            raise ValueError(
+                                f"Amino acid {aa} at position {index} cannot be modified"
+                            )
+                        if mod["ccd"] not in VALID_MODIFICATIONS[aa]:
+                            raise ValueError(
+                                f"Invalid CCD {mod['ccd']} for amino acid {aa}. "
+                                f"Valid options are: {', '.join(VALID_MODIFICATIONS[aa])}"
+                            )
+
+                    elif mod["type"] == "glycos":
+                        if "expression" not in mod:
+                            raise ValueError(
+                                "Missing 'expression' field in glycos modification"
+                            )
+
+                entity["modification"] = modifications
+            except ValueError as e:
+                raise ValueError(f"Invalid modification in protein {sid}: {str(e)}")
+
+        return entity
+
+    def validate_dna_sequence(sequence, sid):
+        """验证DNA序列"""
+        if not sequence:
+            raise ValueError(f"Empty sequence for {sid}")
+
+        if len(sequence) > 2000:
+            raise ValueError(f"DNA sequence length exceeds 2000: {sid}")
+
+        sequence = sequence.upper()
+        valid_bases = set("ATCG")
+        invalid_bases = set(sequence) - valid_bases
+        if invalid_bases:
+            raise ValueError(
+                f"Invalid bases found in DNA sequence {sid}: {invalid_bases}"
+            )
+
+        return sequence
+
+    def create_dna_entity(sequence, sid, modifications=None, count=1):
+        """创建DNA实体"""
+        sequence = validate_dna_sequence(sequence, sid)
+        count = validate_count(count, "DNA")
+
+        entity = {"type": "dna", "sequence": sequence, "count": count}
+
+        if modifications:
+            try:
+                for mod in modifications:
+                    if "type" not in mod:
+                        raise ValueError("Missing 'type' field in modification")
+                    if mod["type"] != "residue_replace":
+                        raise ValueError(
+                            "Only residue_replace modifications are supported for DNA"
+                        )
+                    if "index" not in mod:
+                        raise ValueError("Missing 'index' field in modification")
+                    if "ccd" not in mod:
+                        raise ValueError("Missing 'ccd' field in modification")
+
+                    index = mod["index"]
+                    if not isinstance(index, int):
+                        raise ValueError(
+                            f"Modification index must be an integer, got {type(index)}"
+                        )
+                    if index < 1 or index > len(sequence):
+                        raise ValueError(
+                            f"Modification index {index} out of range (1-{len(sequence)})"
+                        )
+
+                    base = sequence[index - 1]
+                    if base not in VALID_DNA_MODIFICATIONS:
+                        raise ValueError(
+                            f"Base {base} at position {index} cannot be modified"
+                        )
+                    if mod["ccd"] not in VALID_DNA_MODIFICATIONS[base]:
+                        raise ValueError(
+                            f"Invalid CCD {mod['ccd']} for base {base}. "
+                            f"Valid options are: {', '.join(VALID_DNA_MODIFICATIONS[base])}"
+                        )
+
+                entity["modification"] = modifications
+            except ValueError as e:
+                raise ValueError(f"Invalid modification in DNA {sid}: {str(e)}")
+
+        return entity
+
+    def validate_rna_sequence(sequence, sid):
+        """验证RNA序列"""
+        if not sequence:
+            raise ValueError(f"Empty sequence for {sid}")
+
+        if len(sequence) > 2000:
+            raise ValueError(f"RNA sequence length exceeds 2000: {sid}")
+
+        sequence = sequence.upper().replace("T", "U")
+        valid_bases = set("AUCG")
+        invalid_bases = set(sequence) - valid_bases
+        if invalid_bases:
+            raise ValueError(
+                f"Invalid bases found in RNA sequence {sid}: {invalid_bases}"
+            )
+
+        return sequence
+
+    def create_rna_entity(sequence, sid, modifications=None, count=1):
+        """创建RNA实体"""
+        sequence = validate_rna_sequence(sequence, sid)
+        count = validate_count(count, "RNA")
+
+        entity = {"type": "rna", "sequence": sequence, "count": count}
+
+        if modifications:
+            try:
+                for mod in modifications:
+                    if "type" not in mod:
+                        raise ValueError("Missing 'type' field in modification")
+                    if mod["type"] != "residue_replace":
+                        raise ValueError(
+                            "Only residue_replace modifications are supported for RNA"
+                        )
+                    if "index" not in mod:
+                        raise ValueError("Missing 'index' field in modification")
+                    if "ccd" not in mod:
+                        raise ValueError("Missing 'ccd' field in modification")
+
+                    index = mod["index"]
+                    if not isinstance(index, int):
+                        raise ValueError(
+                            f"Modification index must be an integer, got {type(index)}"
+                        )
+                    if index < 1 or index > len(sequence):
+                        raise ValueError(
+                            f"Modification index {index} out of range (1-{len(sequence)})"
+                        )
+
+                    base = sequence[index - 1]
+                    if base not in VALID_RNA_MODIFICATIONS:
+                        raise ValueError(
+                            f"Base {base} at position {index} cannot be modified"
+                        )
+                    if mod["ccd"] not in VALID_RNA_MODIFICATIONS[base]:
+                        raise ValueError(
+                            f"Invalid CCD {mod['ccd']} for base {base}. "
+                            f"Valid options are: {', '.join(VALID_RNA_MODIFICATIONS[base])}"
+                        )
+
+                entity["modification"] = modifications
+            except ValueError as e:
+                raise ValueError(f"Invalid modification in RNA {sid}: {str(e)}")
+
+        return entity
+
+    def create_ligand_entity(ligand, count=1):
+        """创建配体实体"""
+        count = validate_count(count, "Ligand")
+
+        try:
+            if isinstance(ligand, list):  # CCD codes
+                if len(ligand) < 2:
+                    raise ValueError("Empty CCD code list")
+                entity = {"type": "ligand", "ccd": ligand[1], "count": count}
+            else:  # SMILES
+                if not isinstance(ligand, str):
+                    raise ValueError(f"SMILES must be a string, got {type(ligand)}")
+                if not ligand:
+                    raise ValueError("Empty SMILES string")
+                # TODO: 添加对SMILES重核数量验证
+                entity = {"type": "ligand", "smiles": ligand, "count": count}
+            return entity
+        except ValueError as e:
+            raise ValueError(f"Invalid ligand: {str(e)}")
+
+    def create_ion_entity(ion_ccd, count=1):
+        """创建离子实体"""
+        count = validate_count(count, "Ion")
+
+        try:
+            if not isinstance(ion_ccd, str):
+                raise ValueError(f"Ion CCD code must be a string, got {type(ion_ccd)}")
+            if ion_ccd not in VALID_IONS:
+                raise ValueError(
+                    f"Invalid ion CCD code: {ion_ccd}. "
+                    f"Valid options are: {', '.join(sorted(VALID_IONS))}"
+                )
+            return {"type": "ion", "ccd": ion_ccd, "count": count}
+        except ValueError as e:
+            raise ValueError(f"Invalid ion: {str(e)}")
+
+    def detect_sequence_type(sequence):
+        """根据序列内容判断序列类型"""
+        sequence = sequence.upper()
+        protein_chars = set("ACDEFGHIKLMNPQRSTVWY")
+        dna_chars = set("ATCG")
+        rna_chars = set("AUCG")
+
+        seq_chars = set(sequence)
+
+        # 如果序列只包含AUCG，则可能是RNA
+        if seq_chars.issubset(rna_chars):
+            return "rna"
+        # 如果序列只包含ATCG，则可能是DNA
+        elif seq_chars.issubset(dna_chars):
+            return "dna"
+        # 如果序列包含蛋白质特有的氨基酸，则是蛋白质
+        elif seq_chars.issubset(protein_chars):
+            return "protein"
         else:
             raise ValueError(
-                f"Invalid ion CCD code: {ion}. Must be one of: {', '.join(sorted(VALID_IONS))}"
+                f"Unable to determine sequence type. Invalid characters: {seq_chars - (protein_chars | dna_chars | rna_chars)}"
             )
+
+    # 处理所有序列文件
+    for file_path, file_type in [
+        (protein_file, "protein"),
+        (dna_file, "dna"),
+        (rna_file, "rna"),
+    ]:
+        if file_path:
+            seqs = load_fasta(file_path)
+            for sid, sequence in seqs:
+                # 根据输入参数类型处理序列
+                if file_type == "protein":
+                    # 验证是否为蛋白质序列
+                    try:
+                        entity = create_protein_entity(sequence, sid)
+                        json_data["entities"].append(entity)
+                    except ValueError as e:
+                        logging.warning(f"Skipping sequence {sid}: {str(e)}")
+                        continue
+
+                elif file_type == "dna":
+                    # 验证是否为DNA序列
+                    try:
+                        entity = create_dna_entity(sequence, sid)
+                        json_data["entities"].append(entity)
+                    except ValueError as e:
+                        logging.warning(f"Skipping sequence {sid}: {str(e)}")
+                        continue
+
+                elif file_type == "rna":
+                    # 验证是否为RNA序列，如果是DNA序列也可以转换为RNA
+                    try:
+                        entity = create_rna_entity(sequence, sid)
+                        json_data["entities"].append(entity)
+                    except ValueError as e:
+                        # 检查是否为DNA序列，如果是则转换为RNA
+                        try:
+                            seq_type = detect_sequence_type(sequence)
+                            if seq_type == "dna":
+                                sequence = sequence.upper().replace("T", "U")
+                                entity = create_rna_entity(sequence, sid)
+                                json_data["entities"].append(entity)
+                            else:
+                                logging.warning(f"Skipping sequence {sid}: {str(e)}")
+                        except ValueError:
+                            logging.warning(f"Skipping sequence {sid}: {str(e)}")
+                            continue
+
+    # 处理配体
+    if ligand_file:
+        ligands = load_ligands(ligand_file)
+        for ligand in ligands:
+            entity = create_ligand_entity(ligand)
+            json_data["entities"].append(entity)
+
+    # 处理离子
+    if ion:
+        entity = create_ion_entity(ion)
+        json_data["entities"].append(entity)
 
     # 验证实体数量和总长度
     if not json_data["entities"]:
@@ -248,7 +526,6 @@ def get_results_single_run():
         with open("input.json") as f:
             input_data = json.load(f)
             job_name = input_data[0].get("job_name", "complex")
-            ensemble_size = input_data[0].get("ensemble", 1)
 
         # 检查数据目录下的结果
         data_dir = os.path.join("data", f"{job_name}_0")
@@ -291,7 +568,7 @@ def get_results_single_run():
             for file in required_files:
                 file_path = os.path.join(ensemble_dir, file)
                 if not os.path.exists(file_path):
-                    raise RuntimeError(f"在{ensemble_dir}中未找到必需文件: {file}")
+                    raise RuntimeError(f"在{ensemble_dir}中未找到所需文件: {file}")
 
             # 获取ensemble编号
             ensemble_id = os.path.basename(ensemble_dir).split("-")[1]
@@ -363,7 +640,7 @@ def get_results_single_run():
             f"- ranking_scores.csv (排名信息)"
         )
 
-        logging.info(f"原始结果文件位于: {result_zip}")
+        logging.info(f"原结果文件位置: {result_zip}")
         return True
 
     except Exception as e:
