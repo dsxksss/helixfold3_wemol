@@ -7,6 +7,7 @@ job_name = { required = false, default = "complex", help = "job name for the pre
 protein = { required = false, help = "path to protein sequences FASTA file" }
 dna = { required = false, help = "path to DNA sequences FASTA file" }
 rna = { required = false, help = "path to RNA sequences FASTA file" }
+modification = { required = false, help = "path to modification file (format: sequence_number,CCD_code,position per line)" }
 ligand = { required = false, help = "path to ligand entries file" }
 ion = { required = false, help = "ion CCD code (MG/ZN/CL/CA/NA/MN/MN3/K/FE/FE2/CU/CU1/CU3/CO)" }
 recycle = { type = "int", default = 10, choices = [10, 20, 50, 100], help = "recycle parameter for model inference (10/20/50/100)" }

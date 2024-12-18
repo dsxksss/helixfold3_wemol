@@ -47,6 +47,23 @@ dev = "rye run protein_medium"
 test_dev = "rye test -a -- tests/test_sciprt_with_dev.py"
 test_pro = "rye test -a -- tests/test_sciprt_with_pro.py"
 
+# 修饰测试
+protein_with_modification = """rye run main --job_name pro_mod \
+    --protein ./test_files/protein-modification/pro_mod.fasta \
+    --modification ./test_files/protein-modification/modification.txt
+"""
+
+complex_protein_dna_with_modification = """rye run main --job_name pro_dna_mod \
+    --protein ./test_files/protein-DNA-modification/pro_dna_mod.fasta \
+    --dna ./test_files/protein-DNA-modification/dna_mod.fasta \
+    --modification ./test_files/protein-DNA-modification/modification.txt
+"""
+
+# 多离子测试
+complex_with_multiple_ions = """rye run main --job_name pro_multi_ion \
+    --protein ./test_files/protein-multi-ion/pro_ion.fasta \
+    --ion "MG:2,ZN,CU:3,MN,MN"
+"""
 
 [tool.rye]
 managed = true

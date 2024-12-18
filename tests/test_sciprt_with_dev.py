@@ -104,3 +104,50 @@ def test_complex_protein_rna_ligand():
         "./test_files/protein-RNA-ligand/lig.smi",
     ]
     assert run(complex_protein_rna_ligand_run_cmd).returncode == 0
+
+
+def test_protein_with_modification():
+    protein_with_modification_run_cmd = [
+        "rye",
+        "run",
+        "main",
+        "--job_name",
+        "pro_mod",
+        "--protein",
+        "./test_files/protein-modification/pro_mod.fasta",
+        "--modification",
+        "./test_files/protein-modification/modification.txt"
+    ]
+    assert run(protein_with_modification_run_cmd).returncode == 0
+
+
+def test_complex_protein_dna_with_modification():
+    complex_protein_dna_mod_run_cmd = [
+        "rye",
+        "run",
+        "main",
+        "--job_name",
+        "pro_dna_mod",
+        "--protein",
+        "./test_files/protein-DNA-modification/pro_dna_mod.fasta",
+        "--dna",
+        "./test_files/protein-DNA-modification/dna_mod.fasta",
+        "--modification",
+        "./test_files/protein-DNA-modification/modification.txt"
+    ]
+    assert run(complex_protein_dna_mod_run_cmd).returncode == 0
+
+
+def test_complex_with_multiple_ions():
+    complex_with_multiple_ions_cmd = [
+        "rye",
+        "run",
+        "main",
+        "--job_name",
+        "pro_multi_ion",
+        "--protein",
+        "./test_files/protein-multi-ion/pro_ion.fasta",
+        "--ion",
+        "MG:2,ZN,CU:3,MN,MN"
+    ]
+    assert run(complex_with_multiple_ions_cmd).returncode == 0
