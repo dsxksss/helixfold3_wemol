@@ -6,16 +6,14 @@ import zipfile
 import shutil
 import csv
 import sys
-
 from dotenv import load_dotenv
-
 from py_script_template.cli import get_cli_argument
 from .utils import (
-    set_logging_default_config,
     set_progress_value,
     load_fasta,
     load_ligands,
 )
+import uuid
 
 
 # 定义支持的氨基酸修饰
@@ -200,24 +198,24 @@ def validate_count(count, entity_type, max_count=50):
 # 在create_protein_entity中确保修饰被正确添加
 def create_protein_entity(sequence, sid, modifications=None, count=1):
     """创建蛋白质实体"""
-    print("=" * 80, file=sys.stderr)
-    print(f"处理序列修饰: {modifications}", file=sys.stderr)
-    print("=" * 80, file=sys.stderr)
-    
+    print("=" * 80)
+    print(f"处理序列修饰: {modifications}")
+    print("=" * 80)
+
     # 添加这段代码来显示完整序列
-    print(f"完整序列: {sequence}", file=sys.stderr)
-    print("序列位置对照:", file=sys.stderr)
+    print(f"完整序列: {sequence}")
+    print("序列位置对照:")
     for i, aa in enumerate(sequence, 1):
-        print(f"{i}: {aa}", end=' ', file=sys.stderr)
-    print("\n", file=sys.stderr)
-    
+        print(f"{i}: {aa}", end=" ")
+    print("\n")
+
     if modifications:
-        print("序列中的氨基酸位置:", file=sys.stderr)
+        print("序列中的氨基酸位置:")
         for mod in modifications:
             index = mod["index"]
             aa = sequence[index - 1]
-            print(f"位置 {index}: {aa}", file=sys.stderr)
-    
+            print(f"位置 {index}: {aa}")
+
     sequence = validate_protein_sequence(sequence, sid)
     count = validate_count(count, "Protein")
 
@@ -420,9 +418,9 @@ def create_ion_entity(ion_ccd, count=1):
 
 
 def parse_modifications_file(file_path):
-    print(f"开始解析修饰文件: {file_path}", file=sys.stderr)
+    print(f"开始解析修饰文件: {file_path}")
     if not file_path or not os.path.exists(file_path):
-        print(f"警告: 修饰文件不存在: {file_path}", file=sys.stderr)
+        print(f"警告: 修饰文件不存在: {file_path}")
         return {}
 
     modifications_dict = {}
@@ -480,7 +478,7 @@ def data_to_json(
     recycle,
     ensemble,
     modifications,
-    job_name="complex",
+    job_name,
 ):
     """Convert input data to JSON format list
 
@@ -497,6 +495,9 @@ def data_to_json(
     Returns:
         list: List of task data in JSON format
     """
+
+    print(f"Job name: {job_name}")
+
     # 验证基本参数
     valid_recycle_values = {10, 20, 50, 100}
     if recycle not in valid_recycle_values:
@@ -521,16 +522,16 @@ def data_to_json(
     }
 
     # 解析修饰文件
-    print(f"准备处理修饰文件: {modifications}", file=sys.stderr)
-    
+    print(f"准备处理修饰文件: {modifications}")
+
     modifications_dict = {}
     if modifications:
         try:
-            print(f"正在从文件读取修饰信息: {modifications}", file=sys.stderr)
+            print(f"正在从文件读取修饰信息: {modifications}")
             modifications_dict = parse_modifications_file(modifications)
-            print(f"解析到的修饰信息: {modifications_dict}", file=sys.stderr)
+            print(f"解析到的修饰信息: {modifications_dict}")
         except ValueError as e:
-            print(f"错误: 处理修饰文件时出错: {str(e)}", file=sys.stderr)
+            print(f"错误: 处理修饰文件时出错: {str(e)}")
             raise
 
     # 用于追踪当前处理的序列编号
@@ -551,7 +552,6 @@ def data_to_json(
                 seq_modifications = modifications_dict.get(current_seq_num, [])
                 print(
                     f"Processing sequence {current_seq_num} with modifications: {seq_modifications}",
-                    file=sys.stderr
                 )  # 临时调试
 
                 # 根据输入参数类型处理序列
@@ -564,7 +564,7 @@ def data_to_json(
                             entity["modification"] = seq_modifications
                         json_data["entities"].append(entity)
                     except ValueError as e:
-                        print(f"Warning: Skipping sequence {sid}: {str(e)}", file=sys.stderr)
+                        print(f"Warning: Skipping sequence {sid}: {str(e)}")
                         continue
 
                 elif file_type == "dna":
@@ -576,7 +576,7 @@ def data_to_json(
                             entity["modification"] = seq_modifications
                         json_data["entities"].append(entity)
                     except ValueError as e:
-                        print(f"Warning: Skipping sequence {sid}: {str(e)}", file=sys.stderr)
+                        print(f"Warning: Skipping sequence {sid}: {str(e)}")
                         continue
 
                 elif file_type == "rna":
@@ -586,7 +586,7 @@ def data_to_json(
                         )
                         json_data["entities"].append(entity)
                     except ValueError as e:
-                        print(f"Warning: Skipping sequence {sid}: {str(e)}", file=sys.stderr)
+                        print(f"Warning: Skipping sequence {sid}: {str(e)}")
                         continue
 
     # 处理配体
@@ -624,7 +624,7 @@ def data_to_json(
         raise ValueError(f"Total sequence length exceeds 2000: {total_tokens}")
 
     # 在返回之前打印生成的JSON，方便调试
-    print(f"Generated JSON data: {json.dumps(json_data, indent=2)}", file=sys.stderr)
+    print(f"Generated JSON data: {json.dumps(json_data, indent=2)}")
 
     return [json_data]  # 始终返回列表格式
 
@@ -648,17 +648,12 @@ def run_hf3(json_data) -> bool:
         helixfold3.execute(data=json_data[0], output_dir="./", overwrite=True)
         return True
     except Exception as e:
-        print(f"Error: Failed to run HelixFold3: {str(e)}", file=sys.stderr)
+        print(f"Error: Failed to run HelixFold3: {str(e)}")
         return False
 
 
-def get_results_single_run():
+def get_results_single_run(job_name: str):
     try:
-        # 从input.json读取job_name和ensemble数量
-        with open("input.json") as f:
-            input_data = json.load(f)
-            job_name = input_data[0].get("job_name", "complex")
-
         # 检查数据目录下的结果
         data_dir = os.path.join("data", f"{job_name}_0")
         if not os.path.exists(data_dir):
@@ -755,16 +750,14 @@ def get_results_single_run():
             f"iPTM: {best_result['iptm']:.3f}\n"
             f"Mean pLDDT: {best_result['mean_plddt']:.3f}\n"
             f"Ranking confidence: {best_result['ranking_confidence']:.3f}",
-            file=sys.stderr
         )
 
         # 输出所有ensemble结果的要信息
-        print("\n所有预测结果排名:", file=sys.stderr)
+        print("\n所有预测结果排名:")
         for result in all_ensemble_results:
             print(
                 f"rank{result['rank']}: "
                 f"Ranking confidence = {result['ranking_confidence']:.3f}",
-                file=sys.stderr
             )
 
         # 更新输出文件信息
@@ -772,16 +765,14 @@ def get_results_single_run():
             f"\n结果文件已保存:\n"
             f"- rank_1.cif 至 rank_{len(all_ensemble_results)}.cif (所有结构预测结果)\n"
             f"- ranking_scores.csv (排名信息)",
-            file=sys.stderr
         )
 
-        print(f"原结果文件位置: {result_zip}", file=sys.stderr)
+        print(f"原结果文件位置: {result_zip}")
         return True
 
     except Exception as e:
         print(
             f"处理结果时发生错误: {str(e)} | 或计算失败意外导致结果异常, 请确认参数后重试",
-            file=sys.stderr
         )
         raise
 
@@ -796,7 +787,7 @@ def main() -> int:
     """
     try:
         load_dotenv()
-        print("Starting HelixFold3 prediction pipeline...", file=sys.stderr)
+        print("Starting HelixFold3 prediction pipeline...")
 
         script_path = __file__
         script_dir = os.path.dirname(script_path)
@@ -811,7 +802,11 @@ def main() -> int:
         try:
             config_file = os.path.join(script_dir, "..", "..", "cli_config.toml")
             arguments = get_cli_argument(config_file)
-            print(f"Input Arguments: {arguments}", file=sys.stderr)
+            # 生成一个符合要求的job_name：只包含字母和数字，长度不超过30
+            job_name = str(uuid.uuid4()).replace('-', '')[:30]
+            if not arguments.get("job_name"):
+                arguments["job_name"] = job_name
+            print(f"Input Arguments: {arguments}")
         except Exception as e:
             print(f"Error: Failed to get CLI arguments: {e}", file=sys.stderr)
             return ERR_CODE
@@ -827,10 +822,12 @@ def main() -> int:
                 arguments.get("recycle", 10),
                 arguments.get("ensemble", 1),
                 arguments.get("modification"),
-                arguments.get("job_name", "complex"),
+                arguments["job_name"],  # 直接使用arguments中的job_name
             )
             if not json_data:
-                print("Error: Failed to generate input JSON: empty data", file=sys.stderr)
+                print(
+                    "Error: Failed to generate input JSON: empty data", file=sys.stderr
+                )
                 return ERR_CODE
         except Exception as e:
             print(f"Error: Failed to generate input JSON: {e}", file=sys.stderr)
@@ -851,7 +848,7 @@ def main() -> int:
             print(f"Error: Failed to save input JSON: {e}", file=sys.stderr)
             return ERR_CODE
 
-        # 运行预
+        # 运行预测
         try:
             if not run_hf3(json_data):
                 print("Error: Failed to run HelixFold3", file=sys.stderr)
@@ -863,13 +860,16 @@ def main() -> int:
 
         # 处理结果
         try:
-            get_results_single_run()
+            get_results_single_run(job_name)
             set_progress_value(89)
         except RuntimeError as e:
             print(f"Error: Failed to process results: {e}", file=sys.stderr)
             return ERR_CODE
         except Exception as e:
-            print(f"Error: Unexpected error while processing results: {e}", file=sys.stderr)
+            print(
+                f"Error: Unexpected error while processing results: {e}",
+                file=sys.stderr,
+            )
             return ERR_CODE
 
         try:
@@ -878,7 +878,7 @@ def main() -> int:
             print(f"Error: Failed to set final progress value: {e}", file=sys.stderr)
             return ERR_CODE
 
-        print("Prediction completed successfully!", file=sys.stderr)
+        print("Prediction completed successfully!")
         return 0
 
     except Exception as e:
