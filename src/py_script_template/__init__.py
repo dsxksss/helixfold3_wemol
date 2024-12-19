@@ -422,7 +422,7 @@ def create_ion_entity(ion_ccd, count=1):
 def parse_modifications_file(file_path):
     print(f"开始解析修饰文件: {file_path}", file=sys.stderr)
     if not file_path or not os.path.exists(file_path):
-        print(f"警告: 修饰���件不存在: {file_path}", file=sys.stderr)
+        print(f"警告: 修饰文件不存在: {file_path}", file=sys.stderr)
         return {}
 
     modifications_dict = {}
@@ -750,7 +750,7 @@ def get_results_single_run():
 
         # 出结果信息
         print(
-            f"\n最佳结��� (rank{best_result['rank']}):\n"
+            f"\n最佳结果(rank{best_result['rank']}):\n"
             f"PTM: {best_result['ptm']:.3f}\n"
             f"iPTM: {best_result['iptm']:.3f}\n"
             f"Mean pLDDT: {best_result['mean_plddt']:.3f}\n"
@@ -759,7 +759,7 @@ def get_results_single_run():
         )
 
         # 输出所有ensemble结果的要信息
-        print("\n所有预测果排名:", file=sys.stderr)
+        print("\n所有预测结果排名:", file=sys.stderr)
         for result in all_ensemble_results:
             print(
                 f"rank{result['rank']}: "
