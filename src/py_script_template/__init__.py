@@ -727,14 +727,14 @@ def get_results_single_run():
 
         # 生成简化的CSV文件，只包含rank和ranking_score
         with open("./ranking_scores.csv", "w", newline="") as csvfile:
-            fieldnames = ["Rank", "Ranking_Score"]
+            fieldnames = ["Name", "Ranking_Score"]
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
 
             for result in all_ensemble_results:
                 writer.writerow(
                     {
-                        "Rank": f"rank{result['rank']}",
+                        "Name": f"rank{result['rank']}",
                         "Ranking_Score": f"{result['ranking_confidence']:.3f}",
                     }
                 )
