@@ -860,7 +860,7 @@ def main() -> int:
 
         # 处理结果
         try:
-            get_results_single_run(job_name)
+            get_results_single_run(arguments["job_name"])
             set_progress_value(89)
         except RuntimeError as e:
             print(f"Error: Failed to process results: {e}", file=sys.stderr)
